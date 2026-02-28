@@ -103,7 +103,13 @@ export default function App() {
         if (comparisonLoopRef.current) { clearInterval(comparisonLoopRef.current); comparisonLoopRef.current = null; }
         if (sessionTimerRef.current) { clearInterval(sessionTimerRef.current); sessionTimerRef.current = null; }
 
-        if (sessionData.length > 5) setView(VIEWS.SUMMARY);
+        console.log('[handleStop] sessionData.length:', sessionData.length);
+        console.log('[handleStop] sample with pose?', sessionData[0]?.refPose ? 'yes' : 'no');
+        if (sessionData.length > 5) {
+            setView(VIEWS.SUMMARY);
+        } else {
+            console.warn('[handleStop] Not enough data for summary, need >5, got:', sessionData.length);
+        }
     }, [sessionData]);
 
     useEffect(() => {

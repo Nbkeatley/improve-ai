@@ -11,11 +11,27 @@ import { scoreToColor } from '../utils/poseSimilarity';
  * Each moment can be played as a short clip or paused.
  */
 export default function ImprovementReview({ sessionData, videoFile }) {
-    const worstMoments = useMemo(() => findWorstMoments(sessionData, 3, 3), [sessionData]);
+    const worstMoments = useMemo(() => {
+        console.log('[ImprovementReview] sessionData length:', sessionData?.length);
+        console.log('[ImprovementReview] sample entry:', sessionData?.[0]);
+        const validCount = sessionData?.filter(d => d.videoTime !== undefined && d.refPose && d.userPose).length;
+        console.log('[ImprovementReview] valid entries with pose data:', validCount);
+        const result = findWorstMoments(sessionData, 3, 3);
+        console.log('[ImprovementReview] worstMoments result:', result);
+        return result;
+    }, [sessionData]);
     const [activeClip, setActiveClip] = useState(null); // index of currently playing clip
 
     if (!worstMoments || worstMoments.length === 0 || !videoFile) {
-        return null;
+        console.log('[ImprovementReview] NOT RENDERING because:', !worstMoments ? 'no moments' : worstMoments.length === 0 ? 'empty moments' : 'no videoFile');
+        return (
+            <div className="card" style={{ marginBottom: '16px', padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <p>🎬 Improvement Review: Not enough pose data collected. Try a longer session (10+ seconds).</p>
+                <p style={{ fontSize: '0.75rem', marginTop: '8px' }}>
+                    Debug: {sessionData?.length || 0} samples, {worstMoments?.length || 0} moments found, videoFile: {videoFile ? 'yes' : 'no'}
+                </p>
+            </div>
+        );
     }
 
     return (
