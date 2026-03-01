@@ -51,7 +51,7 @@ function analyzeDifference(refLandmarks, userLandmarks, segmentKey) {
     return `Adjust your ${label} position`;
 }
 
-export function generateVoiceCue(comparison, refLandmarks, userLandmarks) {
+export function generateVoiceCue(comparison, refLandmarks, userLandmarks, posecodeVoiceCue) {
     if (!enabled || !comparison) return;
     const now = Date.now();
     if (now - lastSpeakTime < COOLDOWN_MS) return;
@@ -73,8 +73,9 @@ export function generateVoiceCue(comparison, refLandmarks, userLandmarks) {
 
     if (worstSeg === lastSpokenSegment && now - lastSpeakTime < COOLDOWN_MS * 2) return;
 
-    let message = null;
-    if (refLandmarks && userLandmarks) {
+    // Prefer PoseScript-style voice cue over simple directional feedback
+    let message = posecodeVoiceCue || null;
+    if (!message && refLandmarks && userLandmarks) {
         message = analyzeDifference(refLandmarks, userLandmarks, worstSeg);
     }
     if (!message) {
