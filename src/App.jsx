@@ -5,7 +5,6 @@ import ScoreDisplay from './components/ScoreDisplay';
 import SessionSummary from './components/SessionSummary';
 import { comparePoses } from './utils/poseSimilarity';
 import { generateVoiceCue, setAudioCoachEnabled, resetAudioCoach } from './utils/audioCoach';
-import { getRealtimeCoachingLabel, getVoiceCoachingCue } from './utils/poseDescriber';
 
 const VIEWS = { WELCOME: 'welcome', PRACTICE: 'practice', SUMMARY: 'summary' };
 
@@ -20,7 +19,6 @@ export default function App() {
     const [sessionData, setSessionData] = useState([]);
     const [sessionTime, setSessionTime] = useState(0);
     const [voiceCoach, setVoiceCoach] = useState(true);
-    const [coachingLabel, setCoachingLabel] = useState(null);
 
     const videoPlayerRef = useRef(null);
     const webcamRef = useRef(null);
@@ -77,29 +75,26 @@ export default function App() {
             const refPose = videoPlayerRef.current?.getCurrentPose();
             const userPose = webcamRef.current?.getCurrentPose();
 
-            if (!refPose) { return; }
-            if (!userPose) { return; }
+            if (refPose && userPose) {
+                const result = comparePoses(refPose, userPose);
+                if (result) {
+                    setComparison(result);
+                    generateVoiceCue(result, refPose, userPose);
 
-            const result = comparePoses(refPose, userPose);
-            if (result) {
-                setComparison(result);
-
-                const label = getRealtimeCoachingLabel(refPose, userPose, result.segments);
-                setCoachingLabel(label);
-                const voiceCue = getVoiceCoachingCue(refPose, userPose, result.segments);
-                generateVoiceCue(result, refPose, userPose, voiceCue);
-
-                sampleCountRef.current++;
-                if (sampleCountRef.current % 3 === 0) {
-                    const videoTime = videoPlayerRef.current?.getCurrentTime() || 0;
-                    const entry = {
-                        ...result,
-                        refPose: refPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
-                        userPose: userPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
-                        videoTime,
-                    };
-                    sessionDataRef.current = [...sessionDataRef.current, entry];
-                    setSessionData(sessionDataRef.current);
+                    // Sample every 3rd comparison for session history
+                    sampleCountRef.current++;
+                    if (sampleCountRef.current % 3 === 0) {
+                        // *** KEY CHANGE: Store pose snapshots + video time for improvement review ***
+                        const videoTime = videoPlayerRef.current?.getCurrentTime() || 0;
+                        const entry = {
+                            ...result,
+                            refPose: refPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
+                            userPose: userPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
+                            videoTime,
+                        };
+                        sessionDataRef.current = [...sessionDataRef.current, entry];
+                        setSessionData(sessionDataRef.current);
+                    }
                 }
             }
         }, 100);
@@ -214,7 +209,7 @@ export default function App() {
                         <VideoPlayer ref={videoPlayerRef} videoFile={videoFile} speed={speed} />
                         <WebcamFeed ref={webcamRef} isActive={isActive} segmentScores={comparison?.segments} mirrored={mirrored} />
                     </div>
-                    <ScoreDisplay comparison={comparison} coachingLabel={coachingLabel} />
+                    <ScoreDisplay comparison={comparison} />
                     <div className="controls-bar card" style={{ padding: '12px 20px' }}>
                         <div className="controls-group">
                             {isActive ? (
