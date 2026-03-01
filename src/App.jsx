@@ -82,28 +82,24 @@ export default function App() {
 
             const result = comparePoses(refPose, userPose);
             if (result) {
-                    setComparison(result);
+                setComparison(result);
 
-                    // PoseScript-style descriptive coaching
-                    const label = getRealtimeCoachingLabel(refPose, userPose, result.segments);
-                    setCoachingLabel(label);
-                    const voiceCue = getVoiceCoachingCue(refPose, userPose, result.segments);
-                    generateVoiceCue(result, refPose, userPose, voiceCue);
+                const label = getRealtimeCoachingLabel(refPose, userPose, result.segments);
+                setCoachingLabel(label);
+                const voiceCue = getVoiceCoachingCue(refPose, userPose, result.segments);
+                generateVoiceCue(result, refPose, userPose, voiceCue);
 
-                    // Sample every 3rd comparison for session history
-                    sampleCountRef.current++;
-                    if (sampleCountRef.current % 3 === 0) {
-                        // *** KEY CHANGE: Store pose snapshots + video time for improvement review ***
-                        const videoTime = videoPlayerRef.current?.getCurrentTime() || 0;
-                        const entry = {
-                            ...result,
-                            refPose: refPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
-                            userPose: userPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
-                            videoTime,
-                        };
-                        sessionDataRef.current = [...sessionDataRef.current, entry];
-                        setSessionData(sessionDataRef.current);
-                    }
+                sampleCountRef.current++;
+                if (sampleCountRef.current % 3 === 0) {
+                    const videoTime = videoPlayerRef.current?.getCurrentTime() || 0;
+                    const entry = {
+                        ...result,
+                        refPose: refPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
+                        userPose: userPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
+                        videoTime,
+                    };
+                    sessionDataRef.current = [...sessionDataRef.current, entry];
+                    setSessionData(sessionDataRef.current);
                 }
             }
         }, 100);
