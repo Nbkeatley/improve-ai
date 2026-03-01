@@ -134,7 +134,7 @@ export default function App() {
                 <div className="logo">
                     <div className="logo-icon">💃</div>
                     <div>
-                        <div className="logo-text">DanceCoach AI</div>
+                        <div className="logo-text">DanceCoach-AI</div>
                         <div className="logo-tag">Real-Time Dance Feedback</div>
                     </div>
                 </div>
@@ -150,7 +150,7 @@ export default function App() {
             {view === VIEWS.WELCOME && (
                 <div className="welcome fade-in" id="welcome">
                     <div className="welcome-icon">💃</div>
-                    <h1 className="welcome-title">DanceCoach AI</h1>
+                    <h1 className="welcome-title">DanceCoach-AI</h1>
                     <p className="welcome-sub">
                         See yourself dance better — in real time. Upload any dance video, and our AI will
                         compare your movements body-part by body-part, showing you exactly where to improve.
