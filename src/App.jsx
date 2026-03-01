@@ -25,7 +25,6 @@ export default function App() {
     const comparisonLoopRef = useRef(null);
     const sessionTimerRef = useRef(null);
     const sampleCountRef = useRef(0);
-    const sessionDataRef = useRef([]);
     const [dragging, setDragging] = useState(false);
 
     const handleFileUpload = useCallback((file) => {
@@ -34,7 +33,6 @@ export default function App() {
         setVideoName(file.name);
         setView(VIEWS.PRACTICE);
         setSessionData([]);
-        sessionDataRef.current = [];
         setComparison(null);
         setSessionTime(0);
         setIsActive(false);
@@ -55,7 +53,6 @@ export default function App() {
     const handleStart = useCallback(() => {
         setIsActive(true);
         setSessionData([]);
-        sessionDataRef.current = [];
         setComparison(null);
         setSessionTime(0);
         sampleCountRef.current = 0;
@@ -86,14 +83,12 @@ export default function App() {
                     if (sampleCountRef.current % 3 === 0) {
                         // *** KEY CHANGE: Store pose snapshots + video time for improvement review ***
                         const videoTime = videoPlayerRef.current?.getCurrentTime() || 0;
-                        const entry = {
+                        setSessionData(prev => [...prev, {
                             ...result,
                             refPose: refPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
                             userPose: userPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
                             videoTime,
-                        };
-                        sessionDataRef.current = [...sessionDataRef.current, entry];
-                        setSessionData(sessionDataRef.current);
+                        }]);
                     }
                 }
             }
@@ -108,13 +103,14 @@ export default function App() {
         if (comparisonLoopRef.current) { clearInterval(comparisonLoopRef.current); comparisonLoopRef.current = null; }
         if (sessionTimerRef.current) { clearInterval(sessionTimerRef.current); sessionTimerRef.current = null; }
 
-        // Use ref to always get latest data (avoids stale closure)
-        const data = sessionDataRef.current;
-        if (data.length > 5) {
-            setSessionData([...data]); // ensure state is in sync
+        console.log('[handleStop] sessionData.length:', sessionData.length);
+        console.log('[handleStop] sample with pose?', sessionData[0]?.refPose ? 'yes' : 'no');
+        if (sessionData.length > 5) {
             setView(VIEWS.SUMMARY);
+        } else {
+            console.warn('[handleStop] Not enough data for summary, need >5, got:', sessionData.length);
         }
-    }, []);
+    }, [sessionData]);
 
     useEffect(() => {
         return () => {
