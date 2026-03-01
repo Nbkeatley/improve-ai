@@ -15,11 +15,7 @@ export default function ImprovementReview({ sessionData, videoFile }) {
     const [activeClip, setActiveClip] = useState(null); // index of currently playing clip
 
     if (!worstMoments || worstMoments.length === 0 || !videoFile) {
-        return (
-            <div className="card" style={{ marginBottom: '16px', padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                <p>🎬 Improvement Review: Not enough pose data collected. Try a longer session (10+ seconds).</p>
-            </div>
-        );
+        return null;
     }
 
     return (
@@ -334,7 +330,6 @@ function getWorstSegments(samples) {
     };
 
     for (const sample of samples) {
-        if (!sample.segments) continue;
         for (const [key, score] of Object.entries(sample.segments)) {
             if (score === null) continue;
             if (!segTotals[key]) segTotals[key] = { sum: 0, count: 0 };
