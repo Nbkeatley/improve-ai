@@ -28,10 +28,13 @@ const VideoPlayer = forwardRef(function VideoPlayer({ videoFile, speed, onPosesR
     }));
 
     useEffect(() => {
+        let cancelled = false;
         (async () => {
             try {
                 setLoading(true);
+                console.log('[VideoPlayer] Loading MediaPipe model...');
                 const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+                if (cancelled) return;
                 const landmarker = await PoseLandmarker.createFromOptions(vision, {
                     baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
                     runningMode: 'VIDEO',
@@ -40,18 +43,22 @@ const VideoPlayer = forwardRef(function VideoPlayer({ videoFile, speed, onPosesR
                     minPosePresenceConfidence: 0.5,
                     minTrackingConfidence: 0.5
                 });
+                if (cancelled) { landmarker.close(); return; }
                 landmarkerRef.current = landmarker;
+                console.log('[VideoPlayer] MediaPipe model loaded ✓');
                 setLoading(false);
             } catch (err) {
-                console.error('Failed to init MediaPipe for reference:', err);
+                if (cancelled) return;
+                console.error('[VideoPlayer] Failed to init MediaPipe:', err);
                 setError('Failed to load AI model');
                 setLoading(false);
             }
         })();
 
         return () => {
+            cancelled = true;
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            if (landmarkerRef.current) landmarkerRef.current.close();
+            if (landmarkerRef.current) { landmarkerRef.current.close(); landmarkerRef.current = null; }
             resetSmoothing('ref');
         };
     }, []);
@@ -99,8 +106,12 @@ const VideoPlayer = forwardRef(function VideoPlayer({ videoFile, speed, onPosesR
                 const landmarks = smoothLandmarks(result.landmarks[0], 'ref');
                 currentPoseRef.current = landmarks;
                 drawSkeleton(ctx, landmarks, canvas.width, canvas.height, null, '#38bdf8');
+            } else {
+                currentPoseRef.current = null;
             }
-        } catch (err) { /* timing errors */ }
+        } catch (err) {
+            console.warn('[VideoPlayer] detectForVideo error:', err.message);
+        }
 
         rafRef.current = requestAnimationFrame(detectPose);
     }, []);

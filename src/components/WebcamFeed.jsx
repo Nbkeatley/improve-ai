@@ -25,10 +25,13 @@ const WebcamFeed = forwardRef(function WebcamFeed({ isActive, segmentScores, mir
     }));
 
     useEffect(() => {
+        let cancelled = false;
         (async () => {
             try {
                 setLoading(true);
+                console.log('[WebcamFeed] Loading MediaPipe model...');
                 const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+                if (cancelled) return;
                 const landmarker = await PoseLandmarker.createFromOptions(vision, {
                     baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
                     runningMode: 'VIDEO',
@@ -37,18 +40,22 @@ const WebcamFeed = forwardRef(function WebcamFeed({ isActive, segmentScores, mir
                     minPosePresenceConfidence: 0.5,
                     minTrackingConfidence: 0.5
                 });
+                if (cancelled) { landmarker.close(); return; }
                 landmarkerRef.current = landmarker;
+                console.log('[WebcamFeed] MediaPipe model loaded ✓');
                 setLoading(false);
             } catch (err) {
-                console.error('Failed to init MediaPipe for webcam:', err);
+                if (cancelled) return;
+                console.error('[WebcamFeed] Failed to init MediaPipe:', err);
                 setError('Failed to load AI model');
                 setLoading(false);
             }
         })();
 
         return () => {
+            cancelled = true;
             stopCamera();
-            if (landmarkerRef.current) landmarkerRef.current.close();
+            if (landmarkerRef.current) { landmarkerRef.current.close(); landmarkerRef.current = null; }
             resetSmoothing('user');
         };
     }, []);

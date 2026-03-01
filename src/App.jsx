@@ -68,29 +68,42 @@ export default function App() {
         }, 1000);
 
         // Comparison loop — compare poses every ~100ms
+        let debugLogCount = 0;
         comparisonLoopRef.current = setInterval(() => {
-            const refPose = videoPlayerRef.current?.getCurrentPose();
-            const userPose = webcamRef.current?.getCurrentPose();
+            try {
+                const refPose = videoPlayerRef.current?.getCurrentPose();
+                const userPose = webcamRef.current?.getCurrentPose();
 
-            if (refPose && userPose) {
-                const result = comparePoses(refPose, userPose);
-                if (result) {
-                    setComparison(result);
-                    generateVoiceCue(result, refPose, userPose);
+                // Debug: log pose availability periodically
+                debugLogCount++;
+                if (debugLogCount % 30 === 1) {
+                    console.log('[DanceCoach] Pose check — ref:', !!refPose, '(len:', refPose?.length, ') user:', !!userPose, '(len:', userPose?.length, ')');
+                }
 
-                    // Sample every 3rd comparison for session history
-                    sampleCountRef.current++;
-                    if (sampleCountRef.current % 3 === 0) {
-                        // *** KEY CHANGE: Store pose snapshots + video time for improvement review ***
-                        const videoTime = videoPlayerRef.current?.getCurrentTime() || 0;
-                        setSessionData(prev => [...prev, {
-                            ...result,
-                            refPose: refPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
-                            userPose: userPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
-                            videoTime,
-                        }]);
+                if (refPose && userPose) {
+                    const result = comparePoses(refPose, userPose);
+                    if (debugLogCount % 30 === 1) {
+                        console.log('[DanceCoach] Comparison result:', result ? `overall=${result.overall}` : 'null');
+                    }
+                    if (result) {
+                        setComparison(result);
+                        generateVoiceCue(result, refPose, userPose);
+
+                        // Sample every 3rd comparison for session history
+                        sampleCountRef.current++;
+                        if (sampleCountRef.current % 3 === 0) {
+                            const videoTime = videoPlayerRef.current?.getCurrentTime() || 0;
+                            setSessionData(prev => [...prev, {
+                                ...result,
+                                refPose: refPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
+                                userPose: userPose.map(lm => ({ x: lm.x, y: lm.y, z: lm.z || 0, visibility: lm.visibility || 0 })),
+                                videoTime,
+                            }]);
+                        }
                     }
                 }
+            } catch (err) {
+                console.error('[DanceCoach] Comparison error:', err);
             }
         }, 100);
     }, []);
@@ -199,7 +212,7 @@ export default function App() {
                         <VideoPlayer ref={videoPlayerRef} videoFile={videoFile} speed={speed} />
                         <WebcamFeed ref={webcamRef} isActive={isActive} segmentScores={comparison?.segments} mirrored={mirrored} />
                     </div>
-                    <ScoreDisplay comparison={comparison} />
+                    <ScoreDisplay comparison={comparison} isActive={isActive} />
                     <div className="controls-bar card" style={{ padding: '12px 20px' }}>
                         <div className="controls-group">
                             {isActive ? (
