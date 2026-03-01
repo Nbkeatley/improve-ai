@@ -1,6 +1,6 @@
 import { BODY_SEGMENTS, scoreToColor, scoreToLabel, scoreToGrade } from '../utils/poseSimilarity';
 
-export default function ScoreDisplay({ comparison }) {
+export default function ScoreDisplay({ comparison, isActive }) {
     if (!comparison) {
         return (
             <div className="card score-bar" id="score-display">
@@ -10,7 +10,9 @@ export default function ScoreDisplay({ comparison }) {
                 <div>
                     <div className="card-title" style={{ marginBottom: '8px' }}>Similarity Score</div>
                     <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-                        Load a reference video and start dancing to see your score
+                        {isActive
+                            ? '⏳ Detecting poses… Make sure your full body is visible'
+                            : 'Load a reference video and start dancing to see your score'}
                     </div>
                 </div>
                 <div className="score-grade" style={{ opacity: 0.3 }}>—</div>
