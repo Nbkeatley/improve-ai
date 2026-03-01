@@ -2,17 +2,62 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { findWorstMoments } from '../utils/findWorstMoments';
 import { drawSkeleton } from '../utils/skeletonRenderer';
 import { scoreToColor } from '../utils/poseSimilarity';
+import { serializePosecodesForLLM } from '../utils/poseDescriber';
+import { supabase } from '../integrations/supabase/client';
 
 /**
  * ImprovementReview — Shows the 3 worst moments side-by-side:
  * Left: reference video clip seeked to that timestamp
  * Right: user's stored skeleton wireframe rendered on canvas
- *
- * Each moment can be played as a short clip or paused.
+ * + LLM-generated coaching feedback per moment
  */
 export default function ImprovementReview({ sessionData, videoFile }) {
     const worstMoments = useMemo(() => findWorstMoments(sessionData, 3, 3), [sessionData]);
-    const [activeClip, setActiveClip] = useState(null); // index of currently playing clip
+    const [activeClip, setActiveClip] = useState(null);
+    const [llmFeedback, setLlmFeedback] = useState(null);
+    const [loadingFeedback, setLoadingFeedback] = useState(false);
+
+    // Fetch LLM coaching when worst moments are identified
+    useEffect(() => {
+        if (!worstMoments || worstMoments.length === 0) return;
+
+        const fetchCoaching = async () => {
+            setLoadingFeedback(true);
+            try {
+                const moments = worstMoments.map((m) => {
+                    // Get posecode context from the center sample
+                    const centerSample = m.samples[Math.floor(m.samples.length / 2)];
+                    const posecodeContext = centerSample?.refPose && centerSample?.userPose
+                        ? serializePosecodesForLLM(centerSample.refPose, centerSample.userPose)
+                        : 'Pose data unavailable';
+
+                    const worstSegs = getWorstSegments(m.samples);
+                    return {
+                        timeRange: `${formatTime(m.startVideoTime)} – ${formatTime(m.endVideoTime)}`,
+                        avgScore: m.avgScore,
+                        worstSegments: worstSegs.map(s => `${s.label}: ${Math.round(s.avg)}%`).join(', '),
+                        posecodeContext,
+                    };
+                });
+
+                const { data, error } = await supabase.functions.invoke('dance-coach', {
+                    body: { moments },
+                });
+
+                if (error) {
+                    console.error('LLM coaching error:', error);
+                } else if (data?.feedback) {
+                    setLlmFeedback(data.feedback);
+                }
+            } catch (err) {
+                console.error('Failed to fetch coaching:', err);
+            } finally {
+                setLoadingFeedback(false);
+            }
+        };
+
+        fetchCoaching();
+    }, [worstMoments]);
 
     if (!worstMoments || worstMoments.length === 0 || !videoFile) {
         return (
@@ -39,6 +84,8 @@ export default function ImprovementReview({ sessionData, videoFile }) {
                         videoFile={videoFile}
                         isActive={activeClip === idx}
                         onToggle={() => setActiveClip(activeClip === idx ? null : idx)}
+                        coaching={llmFeedback?.[idx] || null}
+                        loadingCoaching={loadingFeedback}
                     />
                 ))}
             </div>
@@ -46,7 +93,7 @@ export default function ImprovementReview({ sessionData, videoFile }) {
     );
 }
 
-function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
+function MomentCard({ moment, index, videoFile, isActive, onToggle, coaching, loadingCoaching }) {
     const videoRef = useRef(null);
     const userCanvasRef = useRef(null);
     const refCanvasRef = useRef(null);
@@ -74,11 +121,9 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
         const w = canvas.width;
         const h = canvas.height;
 
-        // Dark background
         ctx.fillStyle = '#0b0d1a';
         ctx.fillRect(0, 0, w, h);
 
-        // Draw grid for context
         ctx.strokeStyle = 'rgba(165, 168, 208, 0.06)';
         ctx.lineWidth = 1;
         for (let x = 0; x < w; x += 40) {
@@ -88,13 +133,11 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
         }
 
-        // Draw user skeleton with score-based colors
         const sample = samples[sampleIdx];
         if (sample.userPose) {
             drawSkeleton(ctx, sample.userPose, w, h, sample.segments, '#ec4899');
         }
 
-        // Score badge on canvas
         const score = Math.round(sample.overall);
         const color = scoreToColor(sample.overall);
         ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -106,7 +149,6 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
         ctx.fillText(`${score}%`, w - 16, 28);
     }, [samples]);
 
-    // Draw reference skeleton on canvas
     const drawRefSkeleton = useCallback((sampleIdx) => {
         const canvas = refCanvasRef.current;
         if (!canvas || !samples[sampleIdx]) return;
@@ -122,13 +164,11 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
         }
     }, [samples]);
 
-    // Initial draw
     useEffect(() => {
         drawUserSkeleton(0);
         drawRefSkeleton(0);
     }, [drawUserSkeleton, drawRefSkeleton]);
 
-    // Playback animation
     useEffect(() => {
         if (!isPlaying) {
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -139,7 +179,6 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
         const frameInterval = ((endVideoTime - startVideoTime) * 1000) / samples.length;
         let lastFrameTime = performance.now();
 
-        // Start video playback
         if (videoRef.current) {
             videoRef.current.currentTime = startVideoTime;
             videoRef.current.play().catch(() => {});
@@ -153,7 +192,6 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
                 drawRefSkeleton(frameIdx);
                 lastFrameTime = now;
 
-                // Loop video
                 if (frameIdx === 0 && videoRef.current) {
                     videoRef.current.currentTime = startVideoTime;
                 }
@@ -169,7 +207,6 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
         };
     }, [isPlaying, startVideoTime, endVideoTime, samples, drawUserSkeleton, drawRefSkeleton]);
 
-    // Stop video when clip ends
     useEffect(() => {
         if (!videoRef.current) return;
         const video = videoRef.current;
@@ -187,14 +224,11 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
         onToggle();
     };
 
-    // Scrub through samples manually
     const handleScrub = (e) => {
         const idx = parseInt(e.target.value);
         setCurrentSampleIdx(idx);
         drawUserSkeleton(idx);
         drawRefSkeleton(idx);
-
-        // Seek video to matching time
         if (videoRef.current && samples[idx]) {
             videoRef.current.currentTime = samples[idx].videoTime;
         }
@@ -233,22 +267,39 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
                 </button>
             </div>
 
+            {/* LLM Coaching Feedback */}
+            {loadingCoaching && !coaching && (
+                <div style={{
+                    padding: '12px 16px', marginBottom: '12px', borderRadius: '10px',
+                    background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(236,72,153,0.05))',
+                    border: '1px solid rgba(168,85,247,0.15)',
+                    fontSize: '0.85rem', color: 'var(--text-muted)',
+                }}>
+                    ✨ Generating coaching feedback...
+                </div>
+            )}
+            {coaching && (
+                <div style={{
+                    padding: '14px 16px', marginBottom: '12px', borderRadius: '10px',
+                    background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(236,72,153,0.06))',
+                    border: '1px solid rgba(168,85,247,0.2)',
+                }}>
+                    <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 8px 0' }}>
+                        <span style={{ marginRight: '6px' }}>🎯</span>
+                        {coaching.observation}
+                    </p>
+                    <p style={{ fontSize: '0.82rem', color: '#a855f7', fontWeight: 600, margin: 0 }}>
+                        <span style={{ marginRight: '6px' }}>💡</span>
+                        {coaching.tip}
+                    </p>
+                </div>
+            )}
+
             {/* Side-by-side comparison */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
-                {/* Reference video */}
                 <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', background: '#000', aspectRatio: '16/10' }}>
-                    <video
-                        ref={videoRef}
-                        playsInline
-                        muted
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    />
-                    <canvas
-                        ref={refCanvasRef}
-                        width={640}
-                        height={400}
-                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
-                    />
+                    <video ref={videoRef} playsInline muted style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <canvas ref={refCanvasRef} width={640} height={400} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
                     <span style={{
                         position: 'absolute', top: '8px', left: '8px',
                         padding: '2px 10px', borderRadius: '999px',
@@ -259,15 +310,8 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
                         📹 Reference
                     </span>
                 </div>
-
-                {/* User skeleton */}
                 <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', background: '#0b0d1a', aspectRatio: '16/10' }}>
-                    <canvas
-                        ref={userCanvasRef}
-                        width={640}
-                        height={400}
-                        style={{ width: '100%', height: '100%' }}
-                    />
+                    <canvas ref={userCanvasRef} width={640} height={400} style={{ width: '100%', height: '100%' }} />
                     <span style={{
                         position: 'absolute', top: '8px', left: '8px',
                         padding: '2px 10px', borderRadius: '999px',
@@ -298,7 +342,7 @@ function MomentCard({ moment, index, videoFile, isActive, onToggle }) {
                 </span>
             </div>
 
-            {/* Worst body parts in this moment */}
+            {/* Worst body parts */}
             <div style={{ marginTop: '10px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {getWorstSegments(samples).map((seg, i) => (
                     <span key={i} style={{

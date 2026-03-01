@@ -1,6 +1,6 @@
 import { BODY_SEGMENTS, scoreToColor, scoreToLabel, scoreToGrade } from '../utils/poseSimilarity';
 
-export default function ScoreDisplay({ comparison }) {
+export default function ScoreDisplay({ comparison, coachingLabel }) {
     if (!comparison) {
         return (
             <div className="card score-bar" id="score-display">
@@ -54,6 +54,23 @@ export default function ScoreDisplay({ comparison }) {
 
                 <div className="score-grade" style={{ color }}>{grade}</div>
             </div>
+
+            {/* PoseScript coaching label */}
+            {coachingLabel && (
+                <div className="card" style={{
+                    marginTop: '8px',
+                    padding: '10px 16px',
+                    borderLeft: '3px solid #a855f7',
+                    background: 'linear-gradient(135deg, rgba(168,85,247,0.08), rgba(236,72,153,0.05))',
+                    fontSize: '0.88rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                    animation: 'fadeIn 0.3s ease'
+                }}>
+                    <span style={{ marginRight: '8px' }}>🎯</span>
+                    {coachingLabel}
+                </div>
+            )}
         </div>
     );
 }
