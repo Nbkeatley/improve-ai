@@ -1,1 +1,4 @@
 project_id = "bqucjkafseromtuflgjg"
+
+[functions.dance-coach]
+verify_jwt = false

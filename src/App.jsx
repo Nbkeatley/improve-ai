@@ -77,9 +77,11 @@ export default function App() {
             const refPose = videoPlayerRef.current?.getCurrentPose();
             const userPose = webcamRef.current?.getCurrentPose();
 
-            if (refPose && userPose) {
-                const result = comparePoses(refPose, userPose);
-                if (result) {
+            if (!refPose) { return; }
+            if (!userPose) { return; }
+
+            const result = comparePoses(refPose, userPose);
+            if (result) {
                     setComparison(result);
 
                     // PoseScript-style descriptive coaching
